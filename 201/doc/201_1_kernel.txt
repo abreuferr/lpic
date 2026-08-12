@@ -1,0 +1,48 @@
+# VERSAO
+#
+# o kernel controla e gerencia a comunicacao entre o hardware
+# e os processos em execucao.
+#
+# o linux eh um kernel do tipo monolitico
+#
+# linux >= 3.x.y
+#
+# A.B.C-XYZ 
+# A - versao principal/version
+# B - revisao principal/major revision
+# C - revisao secundaria/minor revidion (patch)
+# XYZ -modificacao
+#
+# exemplo
+#
+# VERSION = 4
+# PATCHLEVEL = 16
+# SUBLEVEL = 9
+
+# DIRETORIO
+#
+# diretorio de armazenamento do kernel - /usr/src/linux-versao
+#
+# link simbolico linux -> linux-source-4.9.51
+
+# BOOT
+# 
+# diretorio a onde fica armazenado o arquivo de configuracao
+# e a imagem do kernel
+#
+config-4.9.51-3-amd64 ; bckup do arquivo de configuracao
+initrd.img-4.9.51-3-amd64
+System.map-4.9.51-3-amd64
+vmlinuz-4.9.51-3-amd64 ; arquivo binario nao compactado do kernel
+
+# DOCUMENTACAO
+#
+# /usr/src/linux/Documentation
+
+# CONFIGURACAO
+#
+# /usr/src/linux/.config
+
+# MAKEFILE
+#
+# /usr/src/linux/Makefile

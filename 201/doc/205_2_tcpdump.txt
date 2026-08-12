@@ -1,0 +1,25 @@
+# TCPDUMP
+#
+# aplicativo utilizado para ficar escutando as interface de rede
+# e capturar pacote para analise.
+#
+# o aplicativo tcpdump trabalha em modo real-time.
+#
+# tcpdump [OPCAO]
+#
+# -i [IFACE] - definir a interface de rede cujos dados serao capturados
+# -q - captura os dados de forma sucinta
+# -w [FILE] - salva os dados em um arquivo
+# -r [FILE] - leitura do arquivo gerado pela opcao -w
+# -v - modo verboso
+# port [XY] - fica monitorando uma determinada porta
+#
+$ tcpdump -i [IFACE] -c [NUM] -nn [PROTOCOLO]
+                                    host [IP]
+                                    port [PORTA]
+                                    src [IP]
+                                    dst [IP]
+                                    src [IP] and port [PORTA]
+                                    -A port [PORTA]
+                                    -w [FILE.PCAP] port [PORTA]
+                                    -r [FILE.PCAP]

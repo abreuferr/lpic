@@ -1,0 +1,818 @@
+#: Title : DNS and Cryptography
+#: Author : "Caio Abreu Ferreira" <abreuferr_gmail.com>
+#: Description : DNS and Cryptography
+#: Options : Weight: 5 
+
+Description: Candidates should have experience and knowledge of 
+cryptography in the context of DNS and its implementation using 
+BIND. The version of BIND covered is 9.7 or higher.
+
+Key Knowledge Areas:
+- Understanding of DNSSEC and DANE
+- Configure and troubleshoot BIND as an authoritative name server serving DNSSEC secured zones
+- Configure BIND as an recursive name server that performs DNSSEC validation on behalf of its clients
+- Key Signing Key, Zone Signing Key, Key Tag
+- Key generation, key storage, key management and key rollover
+- Maintenance and re-signing of zones
+- Use DANE to publish X.509 certificate information in DNS
+- Use TSIG for secure communication with BIND
+
+Terms and Utilities:
+- DNS, EDNS, Zones, Resource Records
+- DNS resource records: DS, DNSKEY, RRSIG, NSEC, NSEC3, NSEC3PARAM, TLSA
+- DO-Bit, AD-Bit
+- TSIG
+- named.conf
+- dnssec-keygen
+- dnssec-signzone
+- dnssec-settime
+- dnssec-dsfromkey
+- rndc
+- dig
+- delv
+- openssl
+
+####################################################################################
+
+#
+# Configuracao Basica
+#
+
+# o processo de atualizacao do SO e instalacao deve
+# ser executado tanto no servidor Master, ns1, quanto
+# no servidor Slave, ns2.
+
+# atualizacao do sistema operacional.
+$ sudo apt-get update && sudo apt-get upgrade
+
+# instalacao do bind e alterando permissao.
+$ sudo apt-get install bind9 dnsutils bind9-doc -y -d
+$ sudo chown -R bind:bind /etc/bind
+
+#
+# Configuracao do servidor Master (ns1)
+#
+
+# a opcao INCLUDE permite a subdivisao do arquivo
+# de configuracao do Bind em varios arquivos. Desta
+# forma, é possivel segmentar a configuracao em varios
+# arquivos.
+$ cat /etc/bind/named.conf
+        include "/etc/bind/named.conf.options";
+        include "/etc/bind/named.conf.local";
+        include "/etc/bind/named.conf.default-zones";
+
+# ajustes no arquivo named.conf.options
+$ sudo cp /etc/bind/named.conf.options{,.origin}
+$ sudo vi /etc/bind/named.conf.options
+	// acl para controle de quem podera fazer requisicao 
+	// de resolucao.
+	acl rede {
+		// rede que podera fazer reqisicao de resolucao
+		// de nome.
+        	192.168.0.0/24;
+	};
+
+	options {
+        	// diretorio de trabalho do servidor.
+        	directory "/etc/bind";
+
+		// por motivos de seguranca, ocultar a
+		// versao do Bind.
+		version none;
+
+                // o bind ficara escutando a porta 53 e ira
+                // responder a requisicoes vindas do 127.0.0.1
+                // e de estacoes provenientes de "rede".
+                listen-on port 53 { localhost; rede; };
+
+        	// quais os hosts ou rede que podem fazer requisicao
+		// de resolucao de um nome.
+        	allow-query { rede; };
+
+		// permitir a requisicao de recursao somente para
+		// hosts presentes na rede local. Se por acaso for
+		// um servidor de dns aberto, nao habilitar essa
+		// opcao.
+		allow-recursion { rede; };
+	};
+
+# o programa named-checonf verifica a o arquivo de configuracao
+# em relacao a sintaxe.
+$ sudo named-checkconf /etc/bind/named.conf.options
+
+# arquivo que contem as entradas das zonas que
+# o bind ira gerenciar.
+#
+$ sudo cp /etc/bind/named.conf.local{,.origin}
+$ sudo vi /etc/bind/named.conf.local
+	// configuracao da zona particula.local
+	zone "particula.local" in {
+		// servidor do tipo master
+		// existem servidores do tipo MASTER, SLAVE
+		// HINT e FORWARD.
+	        type master;
+
+		// arquivo de configuracao da zona particula.local
+	        file "db.particula.local";
+
+		// os dados da configuracao do servidor master serao
+		// transferidos para o servidor slave. essa transferencia
+		// se chama de transferencia de zona.	
+	        allow-transfer { 192.168.0.6; };
+
+		// o servidor master ira notificar o servidor slave de
+		// que houve uma alteracao na configuracao da zona.
+    		notify yes;
+	};
+
+	// configuracao reversa da zona particula.local
+	// o arquivo de nome "addr.arpa" indica que eh um
+	// arquivo de dns reverso.
+	zone "0.168.192.in-addr.arpa" in {
+		// servidor do tipo master.
+		// existem servidores do tipo MASTER, SLAVE
+		// HINT e FORWARD.
+	        type master;
+
+		// arquivo de configuracao da zona particula.local
+	        file "db.0.168.192";
+
+		// os dados da zona serao transferidos para o servidor
+		// slave.
+	    	allow-transfer { 192.168.0.6; };
+
+		// o servidor master ira notificar o servidor slave de
+		// que houve uma alteracao na configuracao da zona.
+    		notify yes;
+	};
+
+# o programa named-checonf verifica se o arquivo de configuracao
+# em relacao a sintaxe e consistencia.
+$ sudo named-checkconf /etc/bind/named.conf.local
+
+// arquivo de configuracao da zona particula.local.
+// Hostname > IP.
+$ sudo vi /etc/bind/db.particula.local
+	// Start of Authority. Define o nome da zona, o email para contato
+	// e o valor de refresh aplicado na zona.
+	// nome do servidor master da zona - ns1.particula.local
+	// email do admin. da zona - root@particula.local
+	$TTL 3D
+	@ IN SOA ns1.particula.local. root.particula.local. (
+		// determina um numero serial de identificacao
+		// da zona.
+		// pode ser qualquer numero, mas por padrao 
+		// utiliza-se a data de criacao da zona e um serial.
+		// a cada nova alteracao, o serial deve ser alterado
+		// para um valor maior.
+		2010101301	;Serial
+
+		// frequencia com que o servidor slave checa a
+		// procura de alteracao.
+		8H		; Refresh
+
+		// em caso de falha, tempo para nova tentativa.
+		2H		; Retry
+
+		// tempo em que a informacao sobre a zona fica
+		// invalida.
+		4W		; Expire
+
+		// tempo de vida.
+		1D 		; Negative Cache TTL
+		)
+
+	; registro dos Name Server (NS).
+	particula.local. NS ns1.particula.local.
+	particula.local. IN NS ns2.particula.local.
+
+	; registro do Mail Exchange (MX).
+		IN MX 10 mail1.particula.local.
+		IN MX 20 mail2.particula.local.
+
+	; registro de associacao Hostname e IP Address (A)
+		IN A 192.168.0.5
+		IN A 192.168.0.6
+
+	; glue record
+	ns1	IN A 192.168.0.5
+	ns2	IN A 192.168.0.6
+
+# testando o arquivo de configuracao da zona.
+$ sudo named-checkzone particula.local /etc/bind/db.particula.local
+	zone particula.local/IN: loaded serial 2019062204
+	OK
+
+# arquivo de configuracao do dns reverso (IP > Hostname)
+$ sudo vi /etc/bind/db.0.168.192 (master)
+	// Start of Authority. Define o nome da zona, o email para contato
+	// e o valor de refresh aplicado na zona.
+	// nome do servidor master da zona - ns1.particula.local
+	// email do admin. da zona - root@particula.local
+	$TTL 3D
+	$ORIGIN 0.168.192.IN-ADDR.ARPA.
+	@ IN SOA ns1.particula.local. root.particula.local. (
+		// numero de serie.
+		2010101301	; Serial
+
+		// frequencia com que o servidor slave checa a
+		// procura de alteracao.
+		8H		; Refresh
+
+		// em caso de falha, tempo para nova tentativa.
+		2H		; Retry
+
+		// tempo em que a informacao sobre a zona fica
+		// invalida.
+		4W		; Expire
+
+		// tempo de vida.
+                1D 		; Negative Cache TTL
+                )
+
+	; registro com os servidores Name Servers.
+		IN NS ns1.particula.local.
+		IN NS ns2.particula.local.
+
+	; registro com as associacoes reversas, IP to Hostname.
+	5	IN PTR	ns1.particula.local.
+	6	IN PTR	ns2.particula.local.
+
+# testando o arquivo de configuracao da zona reversa.
+$ sudo named-checkzone 0.168.192.in-addr.arpa /etc/bind/db.0.168.192
+	zone 0.168.192.in-addr.arpa/IN: loaded serial 2019062204
+	OK
+
+# reler os arquivos de configuracao do Bind.
+$ sudo rndc reload
+	server reload successful
+
+# conteudo do arquivo resolv.conf
+$ sudo cat /etc/resolv.conf
+	domain particula.local
+	search particula.local
+	nameserver 192.168.0.5
+	nameserver 192.168.0.6
+
+#
+# Configuracao do servidor Slave (ns2)
+#
+
+# arquivos de configuracao do bind
+$ sudo cp /etc/bind/named.conf.options{,.origin}
+$ sudo vi /etc/bind/named.conf.options
+	// acl para controle de quem podera fazer requisicao 
+	// de resolucao.
+	acl rede {
+		// rede que podera fazer reqisicao de resolucao
+		// de nome.
+        	192.168.0.0/24;
+	};
+
+	options {
+        	// diretorio de trabalho do servidor.
+        	directory "/etc/bind";
+
+		// por motivos de seguranca, ocultar a
+		// versao do Bind.
+		version none;
+
+                // o bind ficara escutando a porta 53 e ira
+                // responder a requisicoes vindas do 127.0.0.1
+                // e de estacoes provenientes de "rede".
+                listen-on port 53 { localhost; rede; };
+
+		// desabilita qualquer requisicao de transferencia
+		// de zona.
+		allow-transfer{"none"};
+
+        	// quais os hosts ou rede que podem fazer requisicao
+		// de resolucao de um nome.
+        	allow-query { rede; };
+
+		// recursividade.
+		// dns fechado - permite que somente hosts locais possam
+		// requisitar recursividade.
+		// dns aberto - remover essa opcao para suportar todos os
+		// hosts.
+		allow-recursion { localhost; rede; };
+	};
+
+$ sudo cp /etc/bind/named.conf.local{,.origin}
+$ sudo vi /etc/bind/named.conf.local
+	// configuracao da zona particula.local
+	zone "particula.local" IN {
+		// servidor do tipo slave
+		type slave;
+
+		// arquivo de configuracao da zona
+		file "db.particula.local";
+
+		// endereco do servidor master
+		masters { 192.168.0.5; };
+
+		// notificar o servidor master
+		allow-notify { 192.168.0.5; };
+	};
+
+	// configuracao reversa da zona particula.local
+	zone "0.168.192.in-addr.arpa" IN {
+		// servidor do tipo slave
+		type slave;
+
+		// arquivo de configuracao da zona
+		file "db.0.168.192";
+
+		// endereco ip do servidor master
+		masters { 192.168.0.5; };
+
+		// notificar o servidor master
+		allow-notify { 192.168.0.5; };
+	};
+
+# o programa named-checonf verifica a o arquivo de configuracao
+# em relacao a sintaxe.
+$ sudo named-checkconf /etc/bind/named.conf.options
+
+# reinicializar o bind.
+$ sudo systemctl restart bind9.service
+
+# conteudo do arquivo resolv.conf nos servidores NS e estacoes.
+$ sudo cat /etc/resolv.conf
+	domain particula.local
+	search particula.local
+	nameserver 192.168.0.5
+	nameserver 192.168.0.6
+
+####################################################################################
+
+#
+# Transaction SIGnatures# TSIG (Transaction SIGnatures)
+#
+
+#
+# Teoria
+#
+
+# O TSIG faz uso de chaves criptografadas entre dois servidores e/ou clientes para garantir 
+# que somente o conhecedor da chave de TSIG possa realizar interacoes com o servidor de DNS.
+#
+# Um dos recursos do DNS que pode utilizar TSIG eh o mecanismo de transferencia de zonas. 
+# Transferencia de Zona eh o processo pelo qual um servidor secundario (ou slave) envia os 
+# registros do servidor master, replicando assim atualizacoes como adicao e remocao de 
+# registros entre diversos nameservers, sem que o administrador tenha que realizar multiplas 
+# alteracoes em mais de um servidor. Este mecanismo eh amplamente utilizado e muitas vezes, 
+# de forma pouco segura. Permitir Zone Transfers sem excecoes ou de forma pouco limitada 
+# pode permitir que alguem mal intencionado tenha acesso a todo o conteudo da zona, podendo 
+# criar um servidor de DNS falso (tambem conhecido como Rogue Server), facilitando assim o 
+# hijack do DNS e, um pouco mais a frente, ataques de phishing.
+#
+# TSIG eh um mecanismo de autenticacao das mensagens do DNS. O TSIG permite que as
+# mensagens sejam assinadas utilizando uma chave de criptografia compartilhado entre
+# os servidores. A tecnologia TSIG pode ser utilizado por qualquer transacao DNS.
+#
+# O TSIG eh usado para garantir que as informacoes de uma zona que pertence a um 
+# determinado servidor sejam realmente desse servidor. O TSIG tambem eh utilizado para 
+# autenticar a transferencias de zona entre servidores de nomes Master e Slave. Para ter
+# a certeza de que o servidor Slave nunca seja enganado ao aceitar uma copia da zona de 
+# um servidor Master impostor que falsifica o endereço IP.
+#
+# Transaction Signatures − RFC 2845
+# Trafego assinado com uma chave compartilhada (simetrica) entre as duas partes.
+# Utilizado principalmente em tranferencias de zona (master e slave)
+#
+# O TSIG protege os seguintes tipos de transacoes entre os servidores de dns.
+# - transferencia de zona
+# - notificacao
+# - atualizacao dinamica
+# - mensagens de requisicao recursiva
+#
+# como o tsig funciona:
+# 1 - eh criado e adicionado na configuracao de cada servidor Bind, o registro TSIG
+# 2 - o registro tsig assina as mensagens geradas pelo DNS, fazendo com que as mensagens
+#     trocadas entre o servidores nao podem ser modificados durante a transicao entre os
+#     servidores.
+# 3 - o tsig se utiliza da funcao hash para prover autenticidade e integridade das informacoes
+#     trocadas entre os servidores.
+
+#
+# Pratico
+#
+
+#
+# Configuracao do servidor Master - ns1
+#
+
+# criacao da chave de criptografia que sera utilizada na troca
+# de informacoes e configuracao entre os servidores master e 
+# slave.
+$ cd /etc/bind/
+$ dnssec-keygen -a [HMAC-MD5] -b [512] -n HOST [particula_local]
+	-a especificar qual eh o algoritmo que sera utilizado para criar as chaves.
+		RSA | RSAMD5 | DH | DSA | RSASHA1 | HMAC-MD5 | HMAC-SHA1 | HMAC-SHA224 | HMAC-SHA256 |  HMAC-SHA384 | HMAC-SHA512
+	-b especifica o tamanho da chave
+		RSAMD5:         [512..4096]
+        	RSASHA1:        [512..4096]
+        	DH:             [128..4096]
+        	DSA:            [512..1024] and divisible by 64
+        	HMAC-MD5:       [1..512]
+        	HMAC-SHA1:      [1..160]
+        	HMAC-SHA224:    [1..224]
+        	HMAC-SHA256:    [1..256]
+        	HMAC-SHA384:    [1..384]
+        	HMAC-SHA512:    [1..512]
+	-n especifica o tipo de chave
+		ZONE | HOST | ENTITY | USER | OTHER
+
+# sao criados dois arquivos.
+#
+# Kparticula_local.+157+01247.key - Contem a chave publica. O conteudo do arquivos contem o registro DNS KEY que sera inserido no arquivo da zona.
+# Kparticula_local.+157+01247.private - Contem a chave primaria. O arquivo .private contem informacoes referentes ao algoritmo.
+
+# conteudo da chave privada
+$ sudo cat Kparticula_local.+157+01247.private
+	Private-key-format: v1.3
+	Algorithm: 157 (HMAC_MD5)
+	Key: xAl7QKgDoVWyoOV3fy84Xu6ayy/tHEFOVbHqYnemRnad5ByLeETJA4DVdQFkDmdboxc5id40VDI6PTtcnoWI3A==
+	Bits: AAA=
+	Created: 20190102190149
+	Publish: 20190102190149
+	Activate: 20190102190149
+
+# outra forma de se criar a chave de criptografia utilizada pelo TSIG eh atraves
+# da ferramenta TSIG-KEYGEN
+$ sudo tsig-keygen
+	key "tsig-key" {
+		algorithm hmac-sha256;
+		secret "oY6jQFReEisToLiR7hsWdRwpHvkfJ/dJYUeSOoSiOKo=";
+	};
+
+# configuracao do bind.
+$ sudo vi /etc/bind/named.conf.local
+	// define a chave utilizada para controlar e autenticar operacoes.
+	key "particula_local" {
+        	algorithm hmac-md5;
+	        secret "xAl7QKgDoVWyoOV3fy84Xu6ayy/tHEFOVbHqYnemRnad5ByLeETJA4DVdQFkDmdboxc5id40VDI6PTtcnoWI3A==";
+	};
+
+	// servidor slave
+	server 192.168.0.6 {
+        	keys { "particula_local"; };
+	};
+
+	// configuracao da zona particula.local
+	zone "particula.local" {
+        	type master;
+	        file "/etc/bind/db.particula.local";
+        	allow-update { key "particula_local"; };
+	        notify yes;
+	};
+
+	// configuracao do dns reverso da zona particula.local
+	zone "0.168.192.in-addr.arpa" {
+        	type master;
+	        file "/etc/bind/db.0.168.192.in-addr.arpa";
+        	allow-update { key "particula_local"; };
+	};
+
+# testar o arquivo de configuracao
+$ sudo named-checkconf /etc/bind/named.conf.options
+
+# relendo os arquivos de configuracao do bind.
+$ sudo rndc reload
+
+#
+# Configuracao do servidor Slave - ns2
+#
+
+$ sudo vi /etc/bind/named.conf.local
+	// chave de criptografia tsig gerada no servidor
+	// primario/master.
+	key "particula_local" {
+        	algorithm hmac-md5;
+	        secret "xAl7QKgDoVWyoOV3fy84Xu6ayy/tHEFOVbHqYnemRnad5ByLeETJA4DVdQFkDmdboxc5id40VDI6PTtcnoWI3A==";
+	};
+
+	// servidor master
+	server 192.168.0.5 {
+        	keys { particula_local; };
+	};
+
+	// configuracoes da zona particula.local
+	zone "particula.local" {
+        	type slave;
+	        file "/etc/bind/db.particula.local";
+        	masters { 192.168.0.5; };
+	        allow-transfer { key "particula_local"; };
+	};dig @server zone axfr
+
+	// configuracao do dns reverso da zona particula.local
+	zone "0.168.192.in-addr.arpa" {
+        	type slave;
+	        file "/etc/bind/db.0.168.192.in-addr.arpa";
+        	masters { 192.168.0.5; };
+	        allow-transfer { key "particula_local"; };
+	};
+
+# testar o arquivo de configuracao
+$ sudo named-checkconf /etc/bind/named.conf.options
+
+# relendo os arquivos de configuracao do bind.
+$ sudo rndc reload
+
+#
+# Teste
+#
+
+# servidor master
+$ sudo tail -f /var/log/syslog
+
+# servidor slave
+$ sudo rndc retransfer particula.local
+
+# log gerado no servidor master.
+ ns1 systemd[612]: Listening on GnuPG cryptographic agent and passphrase cache.
+ ns1 systemd[612]: Reached target Sockets.
+ ns1 systemd[612]: Reached target Basic System.
+ ns1 systemd[1]: Started User Manager for UID 1000.
+ ns1 systemd[1]: Started Session 3 of user cosmo.
+ ns1 systemd[612]: Reached target Default.
+ ns1 systemd[612]: Startup finished in 198ms.
+ ns1 named[473]: client @0x7f6fd00d59b0 192.168.10.4#53331 (zone): bad zone transfer request: 'zone/IN': non-authoritative zone (NOTAUTH)
+ ns1 named[473]: client @0x7f6fd00b86b0 127.0.0.1#35487 (zone): bad zone transfer request: 'zone/IN': non-authoritative zone (NOTAUTH)
+ ns1 CRON[679]: (root) CMD (   cd / && run-parts --report /etc/cron.hourly)
+ ns1 named[473]: client @0x7f6fc8001f70 192.168.10.5#44515/key particula_local (particula.local): transfer of 'particula.local/IN': AXFR started: TSIG particula_local (serial 2019092301)
+ ns1 named[473]: client @0x7f6fc8001f70 192.168.10.5#44515/key particula_local (particula.local): transfer of 'particula.local/IN': AXFR ended
+
+# log gerado no servidor slave.
+ ns2 named[474]: received control channel command 'retransfer particula.local'
+ ns2 named[474]: zone particula.local/IN: Transfer started.
+ ns2 named[474]: transfer of 'particula.local/IN' from 192.168.10.4#53: connected using 192.168.10.5#44515 TSIG particula_local
+ ns2 named[474]: zone particula.local/IN: transferred serial 2019092301: TSIG 'particula_local'
+ ns2 named[474]: transfer of 'particula.local/IN' from 192.168.10.4#53: Transfer status: success
+ ns2 named[474]: transfer of 'particula.local/IN' from 192.168.10.4#53: Transfer completed: 1 messages, 8 records, 295 bytes, 0.015 secs (19666 bytes/sec)
+ ns2 named[474]: zone particula.local/IN: sending notifies (serial 2019092301)
+
+####################################################################################
+
+#
+# DNSSEC
+#
+
+#
+# Teoria
+#
+
+# O DNSSEC atende aos seguintes requisitos de seguranca.
+#
+# - autenticacao - o servidor DNS indica que ele eh realmente o servidor
+#   responsavel por aquela zona.
+# - integridade - indica que os dados nao foram corrompidos ou alterados. 
+# - prova de nao-existencia - se por acaso o DNS retorna o status de que o dominio
+#   nao existe, eh possivel provar que a resposta veio do servidor autoritativo.
+#
+# - A autenticidade e integridade sao providas pela assinatura dos Conjuntos de registros DNS
+#   do mesmo tipo (Resource Records Sets – RRset) com uma chave privada.
+# - Zonas delegadas (filhas) assinam seus proprios RRsets com sua chave privada.
+# - O registro DS (DS-Record) na zona pai eh o hash da chave publica (DNSKEY) da zona filha. 
+#   Portanto serve para assegurar autenticidade a delegacao da zona, indicando qual chave 
+#   publica pode ser utilizada ler os RRSIGs (assinaturas de RRset).
+# - A chave publica eh usada para verificar RRSIGs, possibilitando a leitura dos RRsets.
+# - Autenticidade da nao existencia (NSEC ou NSEC3) de um nome ou tipo provida por uma cadeia 
+#   de registros que aponta para o proximo em uma sequencia canonica.
+#
+# - Assinatura digital das informacoes da zona
+# - Utiliza o conceito de chaves assimetricas (publica e privada) 
+# - Garante integridade e autenticidade das informacoes
+# - Prove seguranca para a resolucao de enderecos
+# - utiliza o conceito de chaves assimetricas − chave publica e chave privada
+#
+#  O que garante?
+#	- Origem (Autenticidade)
+#	- Integridade
+# 	- A nao existencia de um nome ou tipo
+# O que NAO garante? 
+# 	- Confidencialidade
+#	- Protecao contra ataques de negacao de servico (DOS)
+#
+# 	utiliza o conceito de chaves assimetricas − chave publica e chave privada
+#
+# DNSSEC Resource Records:
+#
+# DNSKEY 
+# 	Um registro DNSKEY mantem uma chave publica que os resolvedores podem usar para 
+# 	verificar assinaturas DNSSEC nos registros RRSIG.
+#
+# RRSIG 
+# 	Assinatura do RRset (somente registros com autoridade)
+# 	Representa a assinatura de um RRset especıfico com uma determinada chave (DNSKEY)
+# 	Possui uma validade inicial (inception) e final (expiration)
+# DS 
+# 	Um registro de delegação de assinatura (DS) fornece informacoes sobre um arquivo de zona 
+# 	assinado. Como habilitar o DNSSEC (extensoes de seguranca do sistema de nomes de dominio) 
+# 	para seu nome de dominio requer essas informacoes para concluir a configuracao do seu nome 
+# 	de dominio assinado.
+# 	Indica:
+#  		- que a zona delegada esta assinada 
+#		- qual a chave usada na zona delegada
+#		- zona Pai possui autoridade pelo record DS das zonas delegadas
+#		- record DS nao deve aparecer no Filho
+#		- o Record DS forma uma cadeia de confianca, a qual garante a 
+#		autenticidade das delegacoes de uma zona ate um ponto de 
+#		confianca (uma chave ancorada)
+#
+#	$ cat dsset-particula.local.
+#	particula.local.	IN DS 50615 13 1 0291681A871DB11649AE0E4B7AED53E3C40AC8A5
+#	particula.local.	IN DS 50615 13 2 05E69ACC105ADB7F26E213B0DC5EFD287BBE083F74F58B6C24DDB7CF B0E2EC48
+
+#
+# Pratico
+#
+
+#
+# Configuracao do servidor Master - ns1
+#
+
+# ativando o dnssec no bind.
+$ sudo vi /etc/bind/named.conf.options
+	options {
+		(...)
+        	dnssec-enable yes;
+        	dnssec-validation yes;
+		(...)
+	};
+
+# verificando o arquivo de configuracao
+$ sudo named-checkconf
+
+# DNSSEC-KEYGEN
+#
+# Uma zona segura deve conter uma ou mais chaves de zona. As chaves da zona assinarão todos os 
+# outros registros na zona, bem como as chaves da zona de qualquer zona delegada segura. As chaves 
+# da zona devem ter o mesmo nome da zona, um tipo de nome de ZONE e devem ser utilizáveis para 
+# autenticação. Recomenda-se que as chaves de zona usem um algoritmo criptográfico designado como 
+# "obrigatório para implementar" pela IETF; Atualmente, existem dois algoritmos: RSASHA256 e 
+# ECDSAP256SHA256. ECDSAP256SHA256 é recomendado para implantações atuais e futuras.
+
+# ZSK - Zone Signing Key
+#
+# Cada zona com DNSSEC ativado possui um par de chaves de assinatura de zona (ZSK): a chave privada 
+# e a chave pública. O ZSK privado é usado para criar assinaturas digitais para cada RRset e as 
+# assinaturas digitais são armazenadas no servidor de nomes como registros RRSIG. Quando um resolvedor 
+# DNSSEC solicita um tipo de registro específico (por exemplo, TXT), além de retornar o próprio registro 
+# TXT, o servidor de nomes também retorna o RRSIG correspondente. O ZSK público é publicado como um 
+# registro DNSKEY, para que o resolvedor possa extrair o registro DNSKEY que contém o ZSK público do 
+# servidor de nomes para verificar a assinatura RRSIG. O RRset, RRSIG e ZSK público juntos podem validar 
+# a resposta.
+# 
+$ sudo dnssec-keygen -r /dev/urandom -a [RSASHA256/ECDSAP256SHA256] -b [2048] -n ZONE [particula.local]
+# -f : Define o tipo da chave
+# -a : Algoritmo
+# -b : Tamanho da chave (bits)
+# -n : Especifica o tipo de dono da chave 
+# -r : Device de randomizacao
+#
+# Arquivos criados:
+# - Kparticula.local.+013+33056.key - chave publica
+# - Kparticula.local.+013+33056.private - chave privada
+
+# KSK - Key Signing Key
+#
+# A chave de assinatura de chave é usada para evitar a situação em que a chave de assinatura de zona seja 
+# comprometida. O KSK valida o registro DNSKEY do ZSK exatamente da mesma maneira que o ZSK protege os 
+# RRSets. Ele assina o ZSK público (que é armazenado em um registro DNSKEY), criando um RRSIG para o registro 
+# DNSKEY. O KSK público é publicado em outro registro DNSKEY, que pode ser usado pelos resolvedores para 
+# verificar o RRSIG.
+#
+$ sudo dnssec-keygen -r /dev/urandom -f [KSK] -a [RSASHA256/ECDSAP256SHA256] -b [4096] -n ZONE [particula.local]
+# -f : Define o tipo da chave
+# -a : Algoritmo
+# -b : Tamanho da chave (bits)
+# -n : Especifica o tipo de dono da chave 
+# -r : Device de randomizacao
+#
+# Arquivos criados:
+# - Kparticula.local.+013+50615.key - chave publica
+# - Kparticula.local.+013+50615.private - cahve privada
+
+# alterando as permissoes das chaves de criptografia que foram
+# criadas nos comandos anteriores.
+$ sudo chown bind:bind Kparticula.local*
+
+# incluindo as duas chaves no arquivo de configuracao do bind.
+# Por que existem dois tipos de chave?
+# - Permite substituir uma chave de uso frequente (ZSK) sem ter a necessidade 
+#   de modificar o DS do parent (hash da KSK)
+# - Permite criar uma chave de tamanho menor para criar assinaturas menores
+$ sudo vi /etc/bind/db.particula.local
+	(...)
+	$INCLUDE /etc/bind/Kparticula.local.+013+33056.key
+	$INCLUDE /etc/bind/Kparticula.local.+013+50615.key
+
+# DNSSEC-SIGNZONE
+#
+# o aplicativo dnssec-signzone assina uma zona. Ele gera registros NSEC e RRSIG 
+# e produz uma versao assinada da zona, arquivo .signed. O status de seguranca 
+# das delegacoes da zona assinada (ou seja, se as zonas filho sao seguras ou nao) 
+# eh determinado pela presenca ou ausencia de um arquivo de conjunto de chaves para 
+# cada zona filho.
+
+# assinando digitalmente a zona particula.local
+$ sudo dnssec-signzone -N increment -o particula.local -o /etc/bind/db.particula.local
+	Verifying the zone using the following algorithms: ECDSAP256SHA256.
+	Zone fully signed:
+	Algorithm: ECDSAP256SHA256: KSKs: 1 active, 0 stand-by, 0 revoked
+        	                    ZSKs: 1 active, 0 stand-by, 0 revoked
+	db.particula.local.signed
+	Signatures generated:                       11
+	Signatures retained:                         0
+	Signatures dropped:                          0
+	Signatures successfully verified:            0
+	Signatures unsuccessfully verified:          0
+	Signing time in seconds:                 0.002
+	Signatures per second:                5085.529
+	Runtime in seconds:                      0.011
+
+# alterando o arquivo de configuracao da zona e agora
+# a configuracao aponta para o arquivo assinado digitalmente
+# pelas chaves.
+$ sudo vi /etc/bind/named.conf.local
+	// Master zones
+	zone "particula.local" {
+	(...)
+		// arquivos de configuracao da zona assinada
+		// digitalmente.
+	        file "/etc/bind/db.particula.local.signed";
+
+		/Realiza automaticamente a assinatura inicial (não é necessário emitir "rndc
+assinar <zona> ”), assinar novamente os registros periodicamente e manipular
+sobreposições examinando os metadados de tempo nos arquivos principais definidos com
+"Dnssec-settime"/ as diretivas abaixo realizam de forma automatica a 
+		// a assinatura inicial e assina novamente os registros
+		// periodicamente e manipula os metadados de tempo nos
+		// arquivos principais definidos atraves do comando 
+		// "dnssec-settime".
+		key-directory "/etc/bind";
+		auto-dnssec maintain;
+		inline-signing yes;
+	(...)
+	};
+
+# verificando o arquivo de configuracao
+$ sudo named-checkconf
+
+# reinicializando o bind.
+$ sudo rndc reload && sudo rndc reconfig && sudo rndc loadkeys particula.local
+
+#
+# Configuracao do servidor Slave - ns2
+#
+
+# ativando o dnssec no bind.
+$ sudo vi /etc/bind/named.conf.options
+	options {
+		(...)
+        	dnssec-enable yes;
+        	dnssec-validation yes;
+		(...)
+	};
+
+# alterando o arquivo de configuracao da zona e agora
+# a configuracao aponta para o arquivo assinado digitalmente
+# pelas chaves.
+$ sudo vi /etc/bind/named.conf.local
+	// Slave zones
+	zone "particula.local" {
+	(...)
+		// arquivos de configuracao da zona assinada
+		// digitalmente.
+	        file "/etc/bind/db.particula.local.signed";
+
+		// as diretivas abaixo realizam de forma automatica a 
+		// a assinatura inicial e assina novamente os registros
+		// periodicamente e manipula os metadados de tempo nos
+		// arquivos principais definidos atraves do comando 
+		// "dnssec-settime".
+		key-directory "/etc/bind";
+		auto-dnssec maintain;
+		inline-signing yes;
+	(...)
+	};
+
+# verificando o arquivo de configuracao
+$ sudo named-checkconf
+
+# reinicializando o bind.
+$ sudo rndc reload && sudo rndc reconfig && sudo rndc loadkeys particula.local
+
+#
+# Test
+#
+
+# Master
+$ sudo rndc signing -list particula.local
+$ sudo named-checkzone -D -f text -o - particula.local db.particula.local.signed
+
+# Slave
+$ sudo named-checkzone -D -f raw -o - particula.local /etc/bind/db.particula.local.signed

@@ -1,0 +1,80 @@
+# DEBIAN
+#
+$ sudo apt-get install build-essential libncurses-dev bison flex libssl-dev libelf-dev bc -y -d
+
+# DOWNLOAD DO KERNEL
+#
+$ wget https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.17.tar.xz
+
+# DESCOMPACTAR
+#
+$ sudo tar -xJvf linux-4.17.tar.xz -C /usr/src/
+
+# LINK SIMBOLICO
+#
+$ cd /usr/src/
+$ sudo ln -s linux-4.17 linux
+
+# CONFIGURACAO
+#
+# A - neste caso, o sysadmin optou por importar as configuracoes do
+# kernel em producao para o kernel que ele deseja instalar atraves
+# do codigo fonte.
+#
+$ sudo cp /boot/config-$(uname -r) .config ; copiar o arquivo de
+     				             configugracao do kernel
+					     em uso.
+
+$ sudo make ondconfig   ; recupera todas as configuracoes do arquivo
+                          .config pre-existente e pergunta somente
+                          por novas configuracoes.
+
+# B - neste caso, o sysadmin optou para fazer toda a configuracao do
+# kernel de forma manual.
+#
+$ sudo make menuconfig  ; configuracao tradicional
+
+# Para customizar o nome do kernel, basta editar o arquivo Makefile
+#
+$ sudo vi /usr/src/linux/Makefile
+	EXTRAVERSION = lpi201
+
+# COMPILACAO
+#
+$ sudo make ; compinado o kernel
+$ sudo make modules ; compilando os modulos
+
+# INSTALACAO
+#
+$ sudo make install ; instalacao do novo kernel
+$ sudo make modules_install ; instalacao dos modulos (/lib/modules/$(uname -r)/)
+
+# Initial Ramdisk
+#
+$ sudo mkinitramfs -o initrd.img-4.13.3lpi_201 4.13.3lpi_201
+
+# atualizacao do grub
+#
+$ sudo update-grub
+
+# reboot
+#
+$ sudo reboot
+
+#
+# PATCH
+#
+
+#
+# aplicando patch no kernel linux
+#
+$ sudo cd /usr/src/linux
+$ sudo xz -dc ../patch-4.17.10.xz | patch -p1
+
+#
+# reverter o patch aplicado no kernel linux
+#
+# opcao -R
+#
+$ sudo cd /usr/src/linux
+$ $ sudo xz -dc ../patch-4.17.10.xz | patch -p1 -R

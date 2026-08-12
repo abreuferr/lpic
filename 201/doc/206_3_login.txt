@@ -1,0 +1,33 @@
+#
+# /ETC/ISSUE
+#
+# - ANTES de fazer o login
+# - conexao LOCAL
+#
+# o conteudo do arquivo /ETC/ISSUE eh exibido
+# ANTES do login LOCAL bem sucedido.
+#
+$ sudo cat /etc/issue
+
+#
+# /ETC/ISSUE.NET
+#
+# - ANTES de fazer o login
+# - conexao REMOTA
+#
+# o conteudo do arquivo /ETC/ISSUE.NET eh exibido
+# ANTES do login REMOTO bem sucedido.
+#
+$ sudo cat /etc/issue.net
+
+#
+# /ETC/MOTD
+#
+# - DEPOIS de fazer o login
+# - conexao LOCAL e REMOTA
+#
+# o conteudo do arquivo /ETC/MOTD eh exibido apos 
+# um login bem sucedido, seja um login LOCAL ou
+# REMOTO
+#
+$ sudo cat /etc/motd

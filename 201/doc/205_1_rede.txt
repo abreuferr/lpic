@@ -1,0 +1,198 @@
+#: Title : Basic networking configuration
+#: Author : "Caio Abreu Ferreira" <abreuferr_gmail.com>
+#: Description : Basic networking configuration
+#: Options : Weight: 3
+
+Description	Candidates should be able to configure a network device to be able 
+to connect to a local, wired or wireless, and a wide-area network. This objective 
+includes being able to communicate between various subnets within a single network 
+including both IPv4 and IPv6 networks.
+
+Key Knowledge Areas:
+- Utilities to configure and manipulate ethernet network interfaces
+- Configuring basic access to wireless networks
+
+The following is a partial list of the used files, terms and utilities:
+- ip
+- ifconfig
+- route
+- arp
+- iw
+- iwconfig
+- iwlist
+
+######
+# IFCONFIG
+######
+
+# VISUALIZACAO DA CONFIGURACAO
+#
+$ ifconfig ; exibe as configuracoes das placas de rede ativas
+$ ifconfig -a ; exibe as configuracoes de todas das placas de rede ativas e inativas
+
+# UP/DOWN
+#
+$ ifconfig [IFACE] up ; ativar uma determinada placa de rede
+$ ifconfig [IFACE] down ; desativa uma determinada placa de rede
+
+# MUTICAST
+#
+$ ifconfig [IFACE] multicast ; habilita multicast em uma placa de rede
+$ ifconfig [IFACE] -multicast ; desabilita multicast em uma placa de rede
+
+# ADICIONAR
+#
+$ ifconfig [IFACE] [IP] ; atribuir um endereco IP em uma determinada interface de rede
+$ ifconfig [IFACE] [IP] netmask [MASK] ; atribuir um IP e Mascara de rede a uma determinada interface de rede
+$ ifconfig [IFACE] [IP] netmask [MASK] broadcast [BCAST] ; atribuir um IP, Mascara de Rede e Broadcast para uma determinada interface de rede
+$ ifconfig [IFACE] [IP/MASK] ; atribuir um IPi e Mascara de Rede em uma determinada interface de rede
+
+# MAIS DE UM IP
+#
+$ ifconfig [IFACE:X] [IP] netmask [MASK] ; atribuir mais de um IP em uma placa de rede
+$ ifconfig [IFACE] add [IP] ; atribuir mais de um IP em uma placa de rede
+
+# MODO PROMISCUO
+#
+$ ifconfig [IFACE] promisc ; habilitar o modo promiscuo em uma placa de rede
+$ ifconfig [IFACE] -promisc ; desabilitar o modo promiscuo em uma placa de rede
+
+# MTU
+#
+$ ifconfig [IFACE] mtu [MTU-VALOR] ; alterar o valor do MTU de uma interface de rede
+
+######
+# ROUTE
+######
+
+# TEORIA
+#
+# a tabela de rotas determina o destino de cada pacote de dados
+# que eh encaminhado para fora por uma interface de rede.
+#
+# para realizar a comunicacao entre computadores de redes
+# diferentes, eh necessario que exista um computador que faca
+# essa intermediacao. O nome deste computador se chama GATEWAY.
+
+# INFORMACAO
+#
+$ route ; exibir as rotas das interfaces de rede
+$ route -n ; exibir as rotas das interfaces de rede sem resolver o nome
+
+# ADICIONAR
+#
+$ route add default gw [IP_GATEWAY] [IFACE] ; atribuir o IP do Gateway para a rota default iem uma determinada placa de rede
+$ route add -net [REDE] netmask [MASK] dev [IFACE] ; adicionar uma rota para uma rede
+$ route add -net [REDE] netmask [MASK] gw [IP-GATEWAY] ; adicionar uma rota para uma rede
+$ route add -net [REDE/MASK] netmask [MASK] dev [IP-GATEWAY] [IFACE] ; adicionar uma rota para uma rede
+
+# REMOVER
+#
+$ route del default gw [IP_GATEWAY] [IFACE] ; apagar a rota default de uma determinada placa de rede
+$ route del -net [REDE] netmask [MASK] [IFACE] ; apagar a rota de uma determinada placa de rede
+$ route del -net [REDE]/[MASK] ; apagar a rota de uma determinada rede
+$ route del -net [REDE]/[MASK] gw [IP-GATEWAY] ; apagar a rota de uma determinada rede
+$ route del default ; apagar a rota default
+
+######
+# IP
+######
+
+# TEORIA
+#
+# devido a depreciacao do aplicativo IFCONFIG, o novo
+# software de configuracanterface de rede eh o comando
+# IP.
+#
+# diferente do comando IFCONFIG que consegue atribui somente endereco ip 
+# para uma determinada placa de rede, o comando IP consegue atribuir tanto 
+# o endereco IP quanto a ROTA em uma determinada placa de rede.
+#
+# ip [OPCAO] [OBJETO] [COMANDO]
+#
+# OPCAO - link, addr, route (add/del)
+# OPBJETO - placa de rede
+# COMANDO - definir a acao a ser tomado
+
+# PLACA DE REDE - EXIBIR INFORMACAO
+#
+$ ip link show ; exibir as inforacoes das placas de redes
+$ ip link show [IFACE]; exibir as inforacoes de uma determinada placa de rede
+$ ip -s link show dev [IFACE] ; exibir estatisticas de uma determinada placa de rede
+$ ip addr show ; exibir informacoes detalhadas em todas as placas de rede
+$ ip addr show [IFACE] ; exibir informacoes detalhadas em uma determinada placa de rede
+
+# PLACA DE REDE - UP/DOWN
+#
+$ ip link set [IFACE] up ; habilitar a placa de rede
+$ ip link set [IFACE] down ; desabilitar a placa de rede
+$ ip link set dev [IFACE] up ; habilitar a placa de rede
+$ ip link set dev [IFACE] down ; desabilitar a placa de rede
+
+# IP - ADICIONAR
+#
+$ ip addr add [IP] dev [IFACE] ; atribuir ip e mascara de rede para uma placa de rede
+$ ip addr add [IP/REDE] dev [IFACE] ; atribuir ip e mascara de rede em uma placa de rede
+$ ip addr add [IP/REDE] broadcast [IP_BROAD] dev [IFACE] ; atribuir ip, mascara de rede e broadcast em uma placa de rede
+$ ip addr add broadcast [IP_BROAD] dev [IFACE] ; atribuir broadcast em uma placa de rede
+
+# IP - REMOVER
+#
+$ ip addr del [IP/REDE] dev [IFACE] ; remover o endereco ip, mascara de rede e broadcast de uma determinada interface de rede
+$ ip addr del [IP] dev [IFACE] ; remover o endereco ip, mascara de rede e broadcast de uma determinada interface de rede
+$ ip addr flush dev [IFACE] ; limpar todas as configuracoes de uma determinada placa de rede
+
+# ROTA - EXIBIR INFORMACAO
+#
+$ ip route show ; exibir rotas das interfaces de rede
+$ ip route show [IFACE] ; exibir as rotas de uma determinada placa de rede
+
+# ROTA - ADICIONAR ROTA
+#
+$ ip route add [REDE/MASK] via [IP-GATEWAY] ; adicionar uma rota em uma determinada rede para um determinado gateway
+$ ip route add [REDE/MASK] dev [IP-GATEWAY] ; adicionar uma rota em uma determinada rede para um determinado gateway
+$ ip route add default via [IP_GATEWAY] dev [IFACE] ; adicionar a rota padrao em uma determinada placa de rede
+
+# ROTA - REMOVER
+#
+$ ip route delete [REDE/MASK] via [IP-GATEWAY] ; apagar uma rota em uma determinada rede para um determinado gateway
+$ ip route delete [REDE/MASK] dev [IP-GATEWAY] ; apagar uma rota em uma determinada rede para um determinado gateway
+$ ip route delete [REDE/MASK] via [IFACE] ; remover a rota de uma determinada placa de rede
+$ ip route flush dev [IFACE] ; apagar todas as rotas de uma determinada interface
+
+# VIZINHO - NEIGH
+#
+$ ip neigh show ; exibir o ip de todos os vizinhos do computador
+
+# EXEMPLO
+#
+# ip 192.168.0.10 ; gateway da rede
+# 192.168.0.11 ; host da rede
+#
+$ sudo ip link set dev ens36 up ; ativar interface de rede
+$ sudo ip addr flush dev ens36 ; remover todas as configuracoes da interface de rede
+$ sudo ip addr add 192.168.0.10/24 dev ens36 ; atribuir um numero ip a uma interface de rede
+$ ping -I ens36 192.168.0.11 ; comando ping atraves da interface de rede ens36
+$ sudo tcpdump -i ens36 ; utilizacao do aplicativo tcpdump para verificar a configuracao
+
+$ sudo ifconfig eth1 192.168.0.11 netmask 255.255.255.0 broadcast 192.168.0.255 ; atribuir um numero ip a uma interface de rede
+$ sudo route add default gw 192.168.0.10 eth1 ; atribuindo uma rota
+$ ping -I eth1 192.168.0.10 ; comando ping atraves da interface de rede eth1
+
+######
+# ARP
+######
+
+# TEORIA
+#
+# eh no protocolo ARP que os enderecos IPs sao mapeados
+# para enderecos MAC dos dispositivos de comunicacao,
+# tornando possivel o estabelecimento da comunicacao.
+#
+# o comando ARP  manipula o cache da relacao IP<>MAC
+# e tambem pode ser utilizado para verificar o cache
+# ARP
+
+# ARP - EXIBIR INFORMACAO
+#
+$ arp

@@ -1,0 +1,14 @@
+#: Title : Advanced Network Configuration
+#: Author : "Caio Abreu Ferreira" <abreuferr_gmail.com>
+#: Description : Advanced Network Configuration
+#: Options : Weight: 4
+
+# LSOF
+#
+# aplicativo utilizado para listar os arquivos que estao abertos,
+# quais aplicativos abriram esse arquivos. Eh posssivel exibir
+# tambem quais bibliotecas utilizam determinada biblioteca.
+#
+sudo lsof -a /mnt/sdg 
+COMMAND   PID  USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+vi      15063 cosmo    3u   REG   8,97     4096   12 /mnt/sdg/.teste_lsof.txt.swp

@@ -1,0 +1,6 @@
+# TCP WRAPPER
+#
+# /etc/hosts.allow - lista os hosts que podem ter o acesso ao sistema
+ALL : 192.168.10.
+# /etc/hosts.deny - lista os hosts que NAO pode ter o acesso ao sistema
+ALL : ALL

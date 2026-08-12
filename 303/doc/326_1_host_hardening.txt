@@ -1,0 +1,559 @@
+#: Title : Host Hardening
+#: Author : "Caio Abreu Ferreira" <abreuferr_gmail.com>
+#: Description : Host Hardening
+#: Options : Weight: 3
+
+Description: Candidates should be able to secure computers 
+running Linux against common threats. This includes kernel 
+and software configuration.
+
+Key Knowledge Areas:
+- Configure BIOS and boot loader (GRUB 2) security
+- Disable useless software and services
+- Use sysctl for security related kernel configuration
+- Particularly ASLR
+- Exec-Shield 
+- IP/ICMP configuration
+- Limit resource usage
+- Work with chroot environments
+- Drop unnecessary capabilities
+- Be aware of the security advantages of virtualization
+
+Terms and Utilities:
+- grub.cfg
+- chkconfig, systemctl
+- ulimit
+- /etc/security/limits.conf
+- pam_limits.so
+- chroot
+- sysctl
+- /etc/sysctl.conf
+
+###
+# - Configure BIOS and boot loader (GRUB 2) security
+###
+
+# - Criando a senha criptografada
+# 	A senha do Grub eh armazenada em um arquivo do tipo texto e eh armazenado
+# em um formato texto plano. Para gerar o hash da senha que sera armazenada no arquivo 
+# do Grub eh utilizado o aplicativo "grub-mkpasswd-pbkdf2".
+
+$ grub-mkpasswd-pbkdf2
+Enter password:
+Reenter password:
+PBKDF2 hash of your password is grub.pbkdf2.sha512.10000.81A5C85C7AE802652898FB3E619506047CA23E7269997F95D02333168449DD73490C4D7AD0C2FBF9ABAE3D6FFA3D2E7AF442B0F5620D1A648D1EB27F0D54E876.1D6D8441AA527CD7754EAF677DA598E1BF884E12F33EA9FD488799D9786B4C7527C2B4C8127CA908E5E3A5660CBC546039770D0D3CF0095B57A2D3FDC277A63E
+
+# O arquivo principal de configuracao do Grub eh o arquivo /boot/grub/grub.cfg. Esse
+# arquivo eh complexo e nao deve ser editado. Deve-se utilizar os modulos para fazer
+# essa configuracao. 
+# 
+# Deve-se acrescentar as linhas abaixo no arquivo "/etc/grub.d/00_header"
+#
+$ sudo cp /etc/grub.d/00_header{,.origin}
+$ cat /etc/grub.d/00_header
+	#!/bin/bash
+	cat <<EOF
+	set superusers="root"
+	password_pbkdf2 root grub.pbkdf2.sha512.10000.81A5C85C7AE802652898FB3E619506047CA23E7269997F95D02333168449DD73490C4D7AD0C2FBF9ABAE3D6FFA3D2E7AF442B0F5620D1A648D1EB27F0D54E876.1D6D8441AA527CD7754EAF677DA598E1BF884E12F33EA9FD488799D9786B4C7527C2B4C8127CA908E5E3A5660CBC546039770D0D3CF0095B57A2D3FDC277A63E 
+	EOF
+
+# Atualizar o Grub.
+#
+$ sudo grub-mkconfig -o /boot/grub/grub.cfg
+
+###
+# - Disable useless software and services
+###
+
+# CHKCONFIG
+#
+# O utilitario chkconfig eh uma ferramenta de linha de comando que permite 
+# especificar em qual nivel de execucao inicia um servico selecionado, bem 
+# como listar todos os servicos disponveis, juntamente com suas configuracoes 
+# atuais.
+#
+# Os scripts de inicializacao estao localizados no diretorio /etc/rc.d/init.d/
+# (CentOS) ou no diretorio /etc/init.d/ (Debian).
+
+# visualizar o status de todos os servicos.
+$ sudo chkconfig --list
+	NetworkManager  0:off   1:off   2:on    3:on    4:on    5:on    6:off
+	abrtd           0:off   1:off   2:off   3:on    4:off   5:on    6:off
+	acpid           0:off   1:off   2:on    3:on    4:on    5:on    6:off
+	anamon          0:off   1:off   2:off   3:off   4:off   5:off   6:off
+	atd             0:off   1:off   2:off   3:on    4:on    5:on    6:off
+	auditd          0:off   1:off   2:on    3:on    4:on    5:on    6:off
+	avahi-daemon    0:off   1:off   2:off   3:on    4:on    5:on    6:off
+
+# Cada linha consiste no nome do servico seguido por seu status (ativado ou 
+# desativado) para cada um dos sete niveis de execucao numerados. Por exemplo, 
+# na lista acima, o NetworkManager eh ativado nos niveis de execucao 2, 3, 4 e 5, 
+# enquanto o abrtd eh executado nos niveis de execucao 3 e 5. Os servicos baseados 
+# em xinetd sao listados no final, sendo ativados ou desativados.
+
+# visualizar o status de um determinado servico.
+$ sudo chkconfig --list [SERVICO]
+
+# desabilitar um determinado servico.
+$ sudo chkconfig [SERVICO] off
+
+# desabilitar um determinado servico em um determinado runlevel.
+$ sudo chkconfig [SERVICO] off --level [RUNLEVEL]
+
+# habilitar um determinado servico.
+$ sudo chkconfig [SERVICO] on
+
+# habilitar um determinado servico em um determinado runlevel.
+$ sudo chkconfig [SERVICO] on --level [RUNLEVEL]
+
+# apagar um servico
+$ sudo chkconfig del [SERVICO]
+
+# adicionar um servico
+$ sudo chkconfig add [SERVICO]
+
+# SYSTEMD
+#
+# Systemd é um gerenciador de sistemas e serviços para sistemas operacionais Linux. Ele 
+# foi desenvolvido para ser compatível com os scripts de inicialização do SysV e fornece 
+# vários recursos, como inicialização paralela de serviços do sistema no momento da 
+# inicialização, ativação sob demanda de daemons ou lógica de controle de serviço baseada 
+# em dependência.
+#
+# O Systemd apresenta o conceito de unidades systemd. Essas unidades são representadas por 
+# arquivos de configuração de unidades localizados em um dos diretórios /usr/lib/systemd/system/,
+# /run/systemd/system/ ou /etc/systemd/system/ e encapsular informações sobre serviços do 
+# sistema, sockets e outros objetos relevantes para o sistema init. 
+
+# Listar todos os UNITS que estao ativos.
+$ sudo systemctl --list-units
+
+# Lista o status de todos os servicos.
+$ sudo systemctl list-unit-files --type service
+
+# Listar somente os SERVICE que estao ativos.
+$ sudo systemctl list-units --type service --all
+
+# Listar somente os SERVICE que estao em execucao.
+$ sudo systemctl list-units --type service --state running
+
+# Inicializa um servico
+$ sudo systemctl start [SERVICO]
+
+# Visualizar o STATUS de um determinado servico.
+$ sudo systemctl status [SERVICO]
+
+# Para um determinado servico.
+$ sudo systemctl stop [SERVICO]
+
+# Reinicializa um servico.
+$ sudo systemctl restart [SERVICO]
+
+# Re-le as configuracoes do servico.
+$ sudo systemctl reload [SERVICO]
+
+# Habilitar um determinado servico no boot.
+$ sudo systemctl enable [SERVICO]
+
+# Desabilitar um determinado servico no boot.
+$ sudo systemctl disable [SERVICO]
+
+# inicializar o computador em modo de seguranca.
+$ sudo systemctl rescue
+
+# inicializar o computador em modo de emergencia.
+$ sudo systemctl emergency
+
+# exibir em qual runlevel o SO esta em execucao.
+$ sudo systemctl get-default
+
+# alterar o runlevel
+$ sudo systemctl isolate runlevel5.target
+$ sudo systemctl isolate graphical.target
+
+$ sudo systemctl isolate runlevel3.target
+$ sudo systemctl isolate multiuser.target
+
+# definir o runlevel padrao
+$ sudo systemctl set-default runlevel3.target
+$ sudo systemctl set-default runlevel5.target
+
+# Runlevel 0 : desligar o computador
+# Runlevel 1 : executar e modo manutencao
+# Runlevel 3 : multiuser e sem interface grafica
+# Runlevel 4 : multiuser e sem interface grafica
+# Runlevel 5 : multiuser e com interface grafica
+# Runlevel 6 : reinicializar o computador
+
+# como reinicializar, desligar, suspender, hibernar e hibrid-sleep
+$ sudo systemctl reboot
+$ sudo systemctl halt
+$ sudo systemctl suspend
+$ sudo systemctl hibernate
+$ sudo systemctl hybrid-sleep
+
+###
+# - Use sysctl for security related kernel configuration
+###
+
+# sysctl for security related kernel configuration
+#
+# Sysctl eh uma interface para examinar e dinamicamente mudar os parametros 
+# do kernel do sistema operacional GNU/Linux.
+#
+# No Linux, o mecanismo da interface sysctl também é exportado como parte do 
+# procfs no diretório sys. Essa diferença significa que verificar o valor de 
+# algum parâmetro requer a abertura de um arquivo em um sistema de arquivos 
+# virtual, a leitura de seu conteúdo, a análise e o fechamento do arquivo.
+#
+# O diretorio virtual /proc/sys tambem prove uma interface para os paramentros 
+# do sysctl, permitindo que o mesmo seja examinado e alterado. Por exemplo, o
+# arquivo /proc/sys/vm/swappiness eh equivalente ao paramentro vm.swappiness
+# localizado no arquivo /etc/sysctl.conf. 
+
+# Listar todas as variaveis
+$ sudo sysctl -a
+$ sudo sysctl -ar '[VARIAVEL]'
+
+# Visualizar o conteudo de uma determinada variavel.
+$ sudo sysctl [VARIAVEL]
+
+# Alterar o valor da variavel de forma temporaria.
+$ sudo sysctl -w [VARIAVEL]=[VALOR]
+
+# Alterar o valor da variavel de forma permanente.
+$ sudo sysctl [VARIAVEL]=[VALOR] >> /etc/sysctl.conf
+$ sudo sysctl [VARIAVEL]=[VALOR] >> /etc/sysctl.d/security.conf
+
+###
+# - Reverse Path Filtering (rp_filter)
+###
+
+# host responsavel pelo roteamento entre as redes, 192.168.58.0/24 e 
+# 192.168.59.0/24.
+Host router:
+	NIC: ens33
+	IP Address: 192.168.10.3/24 Default route to Internet
+	NIC: ens36
+	IP Address: 192.168.58.3/24
+	NIC: ens37
+	IP Address: 192.168.59.3/24
+
+# workstation 01
+Host w1:
+	NIC: ens33
+	IP Address: 192.168.58.4/24
+	Default route: 192.168.58.3
+
+# workstation 02
+Host w2:
+	NIC: ens33
+	IP Address: 192.168.59.4/24
+	Default route: 192.168.59.3
+
+# router
+$ sudo sysctl -ar 'rp_filter'
+	net.ipv4.conf.all.arp_filter = 0
+	net.ipv4.conf.all.rp_filter = 0
+	net.ipv4.conf.default.arp_filter = 0
+	net.ipv4.conf.default.rp_filter = 0
+	net.ipv4.conf.ens33.arp_filter = 0
+	net.ipv4.conf.ens33.rp_filter = 0
+	net.ipv4.conf.ens36.arp_filter = 0
+	net.ipv4.conf.ens36.rp_filter = 0
+	net.ipv4.conf.ens37.arp_filter = 0
+	net.ipv4.conf.ens37.rp_filter = 0
+	net.ipv4.conf.lo.arp_filter = 0
+	net.ipv4.conf.lo.rp_filter = 0
+
+# router
+$ sudo sysctl -ar '.rp_filter'
+	net.ipv4.conf.all.arp_filter = 0
+	net.ipv4.conf.all.rp_filter = 0
+	net.ipv4.conf.default.arp_filter = 0
+	net.ipv4.conf.default.rp_filter = 0
+	net.ipv4.conf.ens33.arp_filter = 0
+	net.ipv4.conf.ens33.rp_filter = 0
+	net.ipv4.conf.ens36.arp_filter = 0
+	net.ipv4.conf.ens36.rp_filter = 0
+	net.ipv4.conf.ens37.arp_filter = 0
+	net.ipv4.conf.ens37.rp_filter = 0
+	net.ipv4.conf.lo.arp_filter = 0
+	net.ipv4.conf.lo.rp_filter = 0
+
+# router
+$ sudo sysctl -ar '\.rp_filter'
+	net.ipv4.conf.all.rp_filter = 0
+	net.ipv4.conf.default.rp_filter = 0
+	net.ipv4.conf.ens33.rp_filter = 0
+	net.ipv4.conf.ens36.rp_filter = 0
+	net.ipv4.conf.ens37.rp_filter = 0
+	net.ipv4.conf.lo.rp_filter = 0
+
+# router
+# ativando o roteamento entre as redes.
+$ sudo sysctl -w 'net.ipv4.ip_forward=1'
+
+# w1
+# inicializando o IP Spoofing no w1
+# a partir do comando abaixo, qualquer informacao que nao seja referente a
+# conexao ssh, sera redirecionada para o endereco IP 192.168.59.10
+$ sudo iptables -t nat -A POSTROUTING -p tcp -m tcp --dport 22 -j ACCEPT
+$ sudo iptables -t nat -A POSTROUTING -j SNAT --to-source 192.168.59.10
+
+# ativando o tcpdump no roteador e no w2
+# ens36 no roteador conecta o host W1 ao roteador
+# ens33 eh a interface de rede do host W2
+$ sudo tcpdump -i ens36 -p icmp # router
+$ sudo tcpdump -i ens33 -p icmp # w2
+
+# ping do w1(192.168.58.4) para o w2(192.168.59.4)
+$ ping -c2 192.168.59.4
+
+# resultado do tcpdump no router
+# o resultado abaixo indica que a origem do ping eh o IP
+# 192.168.59.10 e nao o IP 192.168.58.4(host W1)
+10:35:07.472986 IP 192.168.59.10 > 192.168.59.4: ICMP echo request, id 1604, seq 1, length 64
+
+# Host ROUTER
+# ativando o anti ip spoofing.
+$ sudo sysctl -w net.ipv4.conf.all.rp_filter=2 ; host ROUTER.
+11:165:09.385086 IP 192.168.59.10 > 192.168.59.4: ICMP echo request, id 1604, seq 1, length 64
+
+###
+# ASLR – Address Space Layout Randomization
+###
+
+# A tecnologia ASLR, Address Space Layout Randomization, protege o sistema operacional
+# GNU/Linux de desenvolvedores e/ou aplicativos não autorizados, randomizando o espaço 
+# de endereço do aplicativo. O ASLR foi introduzido no kernel do Linux em 2005, no início
+#  de 2004, estava disponível como um patch. Com a randomização de memória ativada, o 
+# espaço de endereço no qual um aplicativo eh alocado é randomizado. Significando que um 
+# aplicativo não usa o espaço de endereço em cada execução. Esse é um comportamento 
+# padrão para os módulos Linux, pois eles precisam ser compilados com o suporte ASLR. 
+# Para você observar isso, ele pode ser ativado no Kernel usando o procfs.
+
+# Visualizar o valor da variavel do ASLR no sysctl.
+$ sudo cat /proc/sys/kernel/randomize_va_space
+$ sudo sysctl -a --pattern randomize
+
+# 0 - desabilitado
+# 1 - randomizacao padrao
+# 2 - randomizacao completa
+
+# visualizando a randomizacao do endereco de memoria
+$ ldd /bin/bash
+	linux-vdso.so.1 (0x00007ffe6f173000)
+$ ldd /bin/bash
+	linux-vdso.so.1 (0x00007ffe0a7de000)
+
+# desabilitando o ASLR.
+$ sudo sysctl -w kernel.randomize_va_space=0
+$ ldd /bin/bash
+	linux-vdso.so.1 (0x00007ffe6f173000)
+$ ldd /bin/bash
+	linux-vdso.so.1 (0x00007ffe6f173000)
+
+###
+# Exec-Shield and NX Protection
+###
+
+# Trabalhando em conjunto co a tecnologia ASLR, a tecnologia Exec-Shield eh utilizada para limitar
+# - stack
+# - buffer
+# - estouro de ponteiro
+#
+# A tecnologia exec-Shield e MX manipula os dados armazenados na memória para impedir intenções maliciosas. Ela
+# foi introduliza no kernel do Linux pela empresa RedHat em 2003, na versao RHEL 7. Ela já não pode mais ser 
+# gerenciada via comando sysctl e é ativada por padrão sem a opção de desativar o recurso. Não existe mais uma 
+# chave no procfs para gerenciar o exec-shield. Essa propriedade tambem ocorre em versoes posteriores do Ubuntu. 
+# Em distribuicoes Linux antigas, a chave usada para gerenciar o exec-shield era a chave "kernel.exec-shield" 
+# com os valores 0 e 1, sendo o valor 1 para ativar e 0 para desativar. Atualmente, para visualizar o suporte da
+# tecnologia exec-shield no kernel do Linux, basta executar o comando "grep -Fw nx /proc/cpuinfo" e verificar se
+# a flag NX (No-Execute Bit) aparece.
+
+$ sudo grep -Fw nx /proc/cpuinfo
+	flags: ... nx ...
+
+# Outra forma de visualizar se a tecnologia Exec-Shield e NX estao habilitadas basta executar o comando abaixo.
+
+$ sudo dmesg | grep -Fw NX
+	[    0.000000] NX (Execute Disable) protection: active
+
+
+###
+# IP/ICMP configuration
+###
+
+# Muitos ataques simples começam com uma varredura de ping da sua rede. Os servidores que respondem ao ping podem 
+# ser examinados mais detalhadamente quanto aos serviços a serem explorados. Mesmo que isso não impeça que seus 
+# serviços sejam descobertos, desabilitar as respostas PING do servidor ajudará a obscurecê-lo.
+#
+# Como desabilitar o ping alterando o kernel atraves do sysctl.
+#
+# visualizar a configuracao.
+$ sudo sysctl -ar 'icmp_echo'
+	net.ipv4.icmp_echo_ignore_all = 0
+	net.ipv4.icmp_echo_ignore_broadcasts = 1
+
+# desabilitando o ping.
+$ sudo sysctl -w net.ipv4.icmp_echo_ignore_all=1
+	net.ipv4.icmp_echo_ignore_all = 1
+$ ping localhost
+	3 packets transmitted, 0 received, 100% packet loss, time 54ms
+$ sudo sysctl -w net.ipv4.icmp_echo_ignore_all=0
+	net.ipv4.icmp_echo_ignore_all = 0
+$ ping localhost
+	2 packets transmitted, 2 received, 0% packet loss, time 11ms
+
+# Para que essa configuracao seja ativada de forma permanente,
+# basta criar o arquivo /etc/sysctl.d/security.conf e acrescenta
+# o paramentro "net.ipv4.icmp_echo_ignore_all=1".
+
+###
+# Limit resource usage - ULIMIT
+###
+
+# soft limit
+$ ulimit -a
+	-t: cpu time (seconds)              unlimited
+	-f: file size (blocks)              unlimited
+	-d: data seg size (kbytes)          unlimited
+	-s: stack size (kbytes)             8192
+	-c: core file size (blocks)         0
+	-m: resident set size (kbytes)      unlimited
+	-u: processes                       701
+	-n: file descriptors                1024
+	-l: locked-in-memory size (kbytes)  65536
+	-v: address space (kbytes)          unlimited
+	-x: file locks                      unlimited
+	-i: pending signals                 701
+	-q: bytes in POSIX msg queues       819200
+	-e: max nice                        0
+	-r: max rt priority                 0
+	-N 15:                              unlimited
+
+# hard limit
+$ ulimit -Ha
+	-t: cpu time (seconds)              unlimited
+	-f: file size (blocks)              unlimited
+	-d: data seg size (kbytes)          unlimited
+	-s: stack size (kbytes)             unlimited
+	-c: core file size (blocks)         unlimited
+	-m: resident set size (kbytes)      unlimited
+	-u: processes                       701
+	-n: file descriptors                1048576
+	-l: locked-in-memory size (kbytes)  65536
+	-v: address space (kbytes)          unlimited
+	-x: file locks                      unlimited
+	-i: pending signals                 701
+	-q: bytes in POSIX msg queues       819200
+	-e: max nice                        0
+	-r: max rt priority                 0
+	-N 15:                              unlimited
+
+# o script abaixo ira chamar a si proprio em um loop ate que consuma
+# todos os recursos em relacao a numero de processos. A partir de um
+# determiando ponto, eh exibido uma mensagem indicando que nao existe
+# mais recurso disponivel, que no caso sao 701, -u. 
+$ cat itself.sh
+	#!/bin/bash
+	echo $
+	$0
+$ chmod +x itself.sh
+$ ./itself.sh
+	$
+	$
+	$
+	$
+	./itself.sh: fork: retry: Resource temporarily unavailable
+	./itself.sh: fork: retry: Resource temporarily unavailable
+	./itself.sh: fork: retry: Resource temporarily unavailable
+	./itself.sh: fork: retry: Resource temporarily unavailable
+	^C
+
+# limitando o numero de processos.
+$ ulimit -Su 100
+$ ulimit -Hu 200
+
+# se por acaso o computador for reinicializado, os valores padrao
+# serao restabelecidos. Para alterar de forma definitiva, basta
+# alterar o arquivo "/etc/security/limits.conf". Eh possivel fazer
+# o controle tanto por usuario, quanto por grupo quanto por todos.
+# Alem de definir qual usuario ou grupo que sera afetado, eh possivel
+# definir o tipo de limite, hard ou soft.
+$ cat /etc/security/limits.conf.
+	#<domain>      <type>  <item>         <value>
+	#*             soft    core            0
+	#root          hard    core            100000
+	#*             hard    rss             10000
+	#@student      hard    nproc           20
+
+###
+# Limit resource usage - PAM/LIMIT.SO
+###
+
+###
+# Work with chroot environments
+###
+
+# Muitos serviços oferecem a opção de executar em um ambiente controlado chamado "chroot". De forma
+# simplificada, o chroot faz com que o servico seja executado em um diretorio raiz falso. Tudo o que 
+# o serviço requer para ser executado deve ser copiado para o diretorio chroot. Isso inclui binários,
+# bibliotecas e arquivos de configuracao que o serviço venha a precisar durante a execução. A execução 
+# no ambiente chroot ajuda a proteger o sistema contra ataques maliciosos, os únicos arquivos e diretórios 
+# disponíveis são os da instalação chroot e eles não persistem na reinicialização do serviço. Também 
+# limita a contenção a arquivos que podem ocorrer entre serviços diferentes, pois cada um possui sua 
+# própria cópia enquanto o serviço está sendo executado.
+
+# exemplo de um ambiente chroot.
+# sera criado um ambient bash em modo chroot.
+#
+# criando diretorio onde sera instalado o binario e o arquivo de configuracao.
+$ sudo mkdir -p /bash/{bin,etc}
+
+# criando diretorio onde sera instalado as bibliotecas necessaria para o funcionamento do software.
+$ sudo mkdir -p /bash/{lib64,lib/x86_64-linux-gnu}
+
+# copiando as bilbiotecas necessarias para o funcionamento do bash.
+'/lib/x86_64-linux-gnu/libselinux.so.1' -> '/bash/lib/x86_64-linux-gnu/libselinux.so.1'
+'/lib/x86_64-linux-gnu/libpcre.so.3' -> '/bash/lib/x86_64-linux-gnu/libpcre.so.3'
+'/lib/x86_64-linux-gnu/libdl.so.2' -> '/bash/lib/x86_64-linux-gnu/libdl.so.2'
+'/lib/x86_64-linux-gnu/libpthread.so.0' -> '/bash/lib/x86_64-linux-gnu/libpthread.so.0'
+'/lib/x86_64-linux-gnu/libtinfo.so.5' -> '/bash/lib/x86_64-linux-gnu/libtinfo.so.5'
+'/lib/x86_64-linux-gnu/libtinfo.so.5' -> '/bash/lib/x86_64-linux-gnu/libtinfo.so.6'
+'/lib/x86_64-linux-gnu/libdl.so.2' -> '/bash/lib/x86_64-linux-gnu/libdl.so.2'
+'/lib/x86_64-linux-gnu/libc.so.6' -> '/bash/lib/x86_64-linux-gnu/libc.so.6'
+'/lib64/ld-linux-x86-64.so.2' -> '/bash/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2'
+
+# copiando o ascript de inicializacao do bash para o chroot.
+$ echo "PS1='JAIL $ '" | sudo tee /bash/etc/bash.bashrc
+
+# estrutura de diretorio
+/bash
+|-- bin
+|   |-- bash
+|   `-- ls
+|-- etc
+|   `-- bash.bashrc
+|-- lib
+|   `-- x86_64-linux-gnu
+|       |-- ld-linux-x86-64.so.2
+|       |-- libc.so.6
+|       |-- libdl.so.2
+|       |-- libpcre.so.3
+|       |-- libpthread.so.0
+|       |-- libselinux.so.1
+|       |-- libtinfo.so.5
+|       `-- libtinfo.so.6
+`-- lib64
+    `-- ld-linux-x86-64.so.2
+
+# ativando o bash localizado no ambiente chroot.
+$ sudo chroot /bash /bin/bash
+JAIL $ ls -l
+total 16
+drwxr-xr-x 2 0 0 4096 Sep 27 19:56 bin
+drwxr-xr-x 2 0 0 4096 Sep 27 19:56 etc
+drwxr-xr-x 3 0 0 4096 Sep 27 19:53 lib
+drwxr-xr-x 2 0 0 4096 Sep 27 20:05 lib64

@@ -1,0 +1,72 @@
+####
+# MOUNT
+####
+
+# /PROC/FILESYSTEMS
+#
+# os sistemas de arquivos suportados pelo comando mount
+# estao listados no arquivo abaixo.
+
+# /ETC/MTAB, /PROC/MOUNT, /PROC/SELF/MOUNT
+#
+# estes qrquivos contem informacoes sobre os dispositivos
+# que estao atualmente montados.
+
+# /ETC/FSTAB
+#
+# no arquivo /etc/fstab eh configurado os dispositivos que serao montados durante o boot
+#
+# <dipositivo> <ponto_montagem> <filesystem> <opcao> <dump> <checagem_erro>
+#
+# <dipositivo> - pode ser utilizado duas formas para se referir ao dispositivo. A primeira
+# eh em relacao a sua localizacao no diretorio /dev/, como por exemplo, /dev/sd[XY]. A 
+# segunda forma eh atraves do UUID do dispositivo, numero esse que eh obtido atraves
+# do aplicativo blkid
+
+####
+# COMANDO MOUNT
+###
+#
+# mount [OPCAO] -t [SISTEMA-ARQUIVO] [DISPOSITIVO-NOME] [PONTO-MONTAGEM]
+#
+# [OPCAO]
+# -r ; leitura
+# -w ; leitura e escrita
+# -o noexec ; monta como leitura e escrita mas NAP permite a execucao de nenhum binario
+# -o ro ; leitura
+# -o rw ; leitura e escrita
+# -o user ; qualquer usuario NAO root pode montar
+# -o nouser ; somente root pode montar
+# -o users ; qualquer usuario, incluse root, pode montar
+
+####
+# SWAP
+####
+
+# a area de swap pode ser tanto uma particao do disco rigido, /dev/sd[XY], quanto
+# um arquivos, /[SWAP-FILE-NAME]
+#
+# /PROC/SWAPS
+#
+# uma forma de obter informacoes sobre a particao de swap eh atraves da visualizacao
+# do conteudo do arquivo /PROC/SWAPS
+#
+# outra forma eh atraves do arquivo /ETC/FSTAB
+#
+
+# para criar o arquivo de swap basta executar o comando abaixo.
+#
+# dd if=/dev/zero of=/swap.file bs=1024 count=256
+
+#
+# mkswap - formatar a paricao ou arquivo de swap
+# swapon - ativar o arquivo ou particao de swap
+    swapon [OPCAO] [DISPOSITIVo/ARQUIVO]
+        -s ; exibe informacoes sobre cada area de swap - /PROC/SWAPS
+        [SEM-OPCAO] ; igual a opcao -s
+# swapoff - desativar a particao ou arquivo de swap
+
+# APLICATIVo
+#
+# free ; aplicativo utilizado para monitorar a utilizacao da memoria swap
+# cat /PROC/MEMINFO ; informacoes referente a utilizacao da memoria e swap
