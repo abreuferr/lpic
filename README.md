@@ -13,7 +13,9 @@ Cada diretório numerado corresponde a um exame da grade LPI:
 | `201`     | Exam 201                | LPIC-2       |
 | `202`     | Exam 202                | LPIC-2       |
 | `303`     | Exam 303 (Security)      | LPIC-3       |
-| `304`     | Exam 304 (Virtualization & HA) | LPIC-3 |
+| `304`     | Exam 304 (Virtualization & HA, aposentado) | Referência histórica |
+| `305`     | Exam 305 (Virtualization & Containerization) | LPIC-3 |
+| `306`     | Exam 306 (High Availability & Storage Clusters) | LPIC-3 |
 
 Dentro de cada exame:
 
@@ -21,6 +23,17 @@ Dentro de cada exame:
 - `src/` — arquivos de apoio usados nos exercícios práticos (configs, scripts, chaves/certificados de laboratório, LDIFs etc.), quando aplicável.
 
 Os arquivos de `doc/` seguem o padrão `<tópico>_<subtópico>_<assunto>.txt` (ex.: `207_2_dns.md` = tópico 207, subtópico 2, DNS), com base na numeração oficial dos objetivos do LPI.
+
+## Como estudar
+
+Cada diretório de exame possui um `INDEX.md` que relaciona os objetivos da prova
+com as notas e laboratórios locais. Os índices distinguem material completo,
+parcial e pendente; eles são o ponto de partida para uma revisão orientada à
+versão atual da prova.
+
+Os diretórios `304/` e `303/` preservam material de versões anteriores. Para
+certificação atual, use respectivamente `305/` e `306/`, e o mapa de migração
+em `303/INDEX.md`.
 
 ## Licença
 
